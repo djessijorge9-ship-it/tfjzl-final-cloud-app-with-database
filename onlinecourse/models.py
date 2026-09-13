@@ -1,13 +1,7 @@
-import sys
-from django.utils.timezone import now
-try:
-    from django.db import models
-except Exception:
-    print("There was an error loading django modules. Do you have django installed?")
-    sys.exit()
-
 from django.conf import settings
-import uuid
+from django.core.validators import MinValueValidator
+from django.db import models
+from django.utils.timezone import now
 
 
 # Instructor model
@@ -75,10 +69,11 @@ class Lesson(models.Model):
     course = models.ForeignKey(Course, on_delete=models.CASCADE)
     content = models.TextField()
 
+    def __str__(self):
+        return self.title
 
-# Enrollment model
-# <HINT> Once a user enrolled a class, an enrollment entry should be created between the user and course
-# And we could use the enrollment to track information such as exam submissions
+
+# Enrollment connects each learner to a course and their exam attempts.
 class Enrollment(models.Model):
     AUDIT = 'audit'
     HONOR = 'honor'
@@ -94,10 +89,63 @@ class Enrollment(models.Model):
     mode = models.CharField(max_length=5, choices=COURSE_MODES, default=AUDIT)
     rating = models.FloatField(default=5.0)
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'course'], name='unique_user_course_enrollment'
+            ),
+        ]
 
-# One enrollment could have multiple submission
-# One submission could have multiple choices
-# One choice could belong to multiple submissions
-#class Submission(models.Model):
-#    enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE)
-#    choices = models.ManyToManyField(Choice)
+    def __str__(self):
+        return f'{self.user.username} — {self.course.name}'
+
+
+class Question(models.Model):
+    course = models.ForeignKey(Course, on_delete=models.CASCADE)
+    content = models.CharField(max_length=200)
+    grade = models.IntegerField(default=50, validators=[MinValueValidator(1)])
+
+    class Meta:
+        ordering = ['pk']
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(grade__gte=1), name='question_grade_positive'
+            ),
+        ]
+
+    def __str__(self):
+        return 'Question: ' + self.content
+
+    def is_get_score(self, selected_ids):
+        """Award points only when every correct choice and no wrong choice is selected.
+
+        ``selected_ids`` contains IDs from the whole exam. Restrict comparison
+        to this question, so answers to other questions do not affect its score.
+        A question without any configured correct answer never earns points.
+        """
+        choices = list(self.choice_set.values_list('pk', 'is_correct'))
+        all_ids = {str(choice_id) for choice_id, _ in choices}
+        correct_ids = {str(choice_id) for choice_id, correct in choices if correct}
+        selected = {str(choice_id) for choice_id in selected_ids}
+        return bool(correct_ids) and (selected & all_ids) == correct_ids
+
+
+class Choice(models.Model):
+    question = models.ForeignKey(Question, on_delete=models.CASCADE)
+    content = models.CharField(max_length=200)
+    is_correct = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['pk']
+
+    def __str__(self):
+        return self.content
+
+
+class Submission(models.Model):
+    enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE)
+    choices = models.ManyToManyField(Choice, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'Attempt {self.pk} — {self.enrollment}'

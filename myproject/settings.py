@@ -21,15 +21,28 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # See https://docs.djangoproject.com/en/3.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'aay0j_9b&ky3a7(8m8il+-1ud(scw12@w5!+5-=gsk6ynzi0ls'
+# Local lab key is generated once and excluded from source control.
+from pathlib import Path
+from django.core.management.utils import get_random_secret_key
+_key_path = Path(BASE_DIR) / '.django-secret'
+if not os.environ.get('DJANGO_SECRET_KEY') and not _key_path.exists():
+    try:
+        with _key_path.open('x') as key_file:
+            key_file.write(get_random_secret_key())
+        _key_path.chmod(0o600)
+    except FileExistsError:
+        pass
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY') or _key_path.read_text().strip()
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DJANGO_DEBUG', '1') == '1'
 
 # <HINT> add your cloud host here
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,[::1],.cognitiveclass.ai,.skills.network').split(',')
 
-CSRF_TRUSTED_ORIGINS = ['https://*.cognitiveclass.ai']
+CSRF_TRUSTED_ORIGINS = ['https://*.cognitiveclass.ai', 'https://*.skills.network']
+LOGIN_URL = 'onlinecourse:login'
+DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 
 # Application definition
 INSTALLED_APPS = [
@@ -122,7 +135,12 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/3.0/howto/static-files/
 
 STATIC_URL = '/static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'static')
-MEDIA_ROOT = os.path.join(STATIC_ROOT, 'media')
+STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
+# Prefer the installed Django version's admin assets over the starter's old copy.
+STATICFILES_FINDERS = [
+    'django.contrib.staticfiles.finders.AppDirectoriesFinder',
+    'django.contrib.staticfiles.finders.FileSystemFinder',
+]
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 MEDIA_URL = '/media/'
-

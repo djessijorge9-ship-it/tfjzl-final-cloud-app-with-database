@@ -1,0 +1,61 @@
+{% extends 'onlinecourse/base.html' %}
+{% block title %}{{ course.name }} | Online Course{% endblock %}
+{% block content %}
+  <a class="back-link" href="{% url 'onlinecourse:index' %}"><span aria-hidden="true">&larr;</span> All courses</a>
+  <section class="course-hero">
+    <div>
+      <p class="eyebrow">Learn &amp; practise</p>
+      <h1>{{ course.name }}</h1>
+      <p class="lead">{{ course.description }}</p>
+      <div class="hero-meta"><span>{{ course.lesson_set.count }} lesson{{ course.lesson_set.count|pluralize }}</span><span>{{ course.question_set.count }} exam question{{ course.question_set.count|pluralize }}</span>{% if is_enrolled %}<span class="badge badge-success">Enrolled</span>{% endif %}</div>
+    </div>
+    <div class="hero-note"><span class="eyebrow">Make it stick</span><p>Read the lessons.<br>Test what you know.<br>Learn from your results.</p></div>
+  </section>
+  <section aria-labelledby="lessons-title" class="lessons-section">
+    <div class="section-heading"><h2 id="lessons-title">Course lessons</h2><span class="muted">Your learning material</span></div>
+    {% for lesson in course.lesson_set.all %}
+      <article class="card lesson-card">
+        <div class="lesson-number" aria-hidden="true">{{ forloop.counter|stringformat:'02d' }}</div>
+        <div class="card-body"><h3>{{ lesson.title }}</h3><div class="lesson-content">{{ lesson.content|linebreaks }}</div></div>
+      </article>
+    {% empty %}
+      <div class="card empty-state"><p>Lessons will be available soon.</p></div>
+    {% endfor %}
+  </section>
+  <section class="exam-section" aria-labelledby="exam-title">
+    <div class="section-heading"><h2 id="exam-title">Course exam</h2><span class="muted">Pass mark: above 80%</span></div>
+    {% if user.is_authenticated %}
+      {% if is_enrolled %}
+        {% if exam_ready %}
+          <p class="exam-instructions" id="exam-instructions">Select <strong>all correct choices</strong> for each question. A question earns its points only when your selections match every correct answer, with no incorrect choices selected.</p>
+          <details class="exam-disclosure" id="exam">
+            <summary class="btn btn-primary btn-block">Start Exam <span class="summary-symbol" aria-hidden="true">+</span></summary>
+            <form id="questionform" action="{% url 'onlinecourse:submit' course.id %}" method="post" aria-describedby="exam-instructions">
+              {% csrf_token %}
+              {% for question in course.question_set.all %}
+                <fieldset class="card question-card">
+                  <legend class="card-header"><span class="eyebrow">Question {{ forloop.counter }} &middot; {{ question.grade }} points</span><span class="question-title">{{ question.content }}</span></legend>
+                  <div class="card-body form-group">
+                    {% for choice in question.choice_set.all %}
+                      <div class="form-check choice-row">
+                        <input class="form-check-input" type="checkbox" name="choice_{{ choice.id }}" id="choice_{{ choice.id }}" value="{{ choice.id }}">
+                        <label class="form-check-label" for="choice_{{ choice.id }}">{{ choice.content }}</label>
+                      </div>
+                    {% endfor %}
+                  </div>
+                </fieldset>
+              {% endfor %}
+              <div class="submit-row"><p class="muted">You can review your answers and retake the exam after submitting.</p><button class="btn btn-success" type="submit">Submit exam <span aria-hidden="true">&rarr;</span></button></div>
+            </form>
+          </details>
+        {% else %}
+          <div class="card empty-state"><h3>The exam is not ready yet</h3><p>Your instructor is preparing the questions and answer choices.</p><button class="btn btn-primary" type="button" disabled>Start Exam</button></div>
+        {% endif %}
+      {% else %}
+        <div class="card enrollment-prompt"><div><h3>Ready to check your understanding?</h3><p>Enroll in this course to take the exam and see your results.</p></div><form action="{% url 'onlinecourse:enroll' course.id %}" method="post">{% csrf_token %}<button class="btn btn-primary" type="submit">Enroll in course</button></form></div>
+      {% endif %}
+    {% else %}
+      <div class="card enrollment-prompt"><div><h3>Keep learning with an account</h3><p>Log in or sign up, then enroll to take the course exam.</p></div><a class="btn btn-primary" href="{% url 'onlinecourse:login' %}">Log in to continue</a></div>
+    {% endif %}
+  </section>
+{% endblock %}
